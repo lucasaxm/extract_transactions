@@ -7,10 +7,19 @@ import matplotlib.pyplot as plt
 
 # Function to consolidate similar establishments
 def consolidate_establishments(name):
-    name = name.lower().split()[0]  # Consider only the first word and make it lowercase
-    if name in ['supermago', 'bourbon', 'supermagoporto']:
+    name = name.lower()
+    first_word = name.split()[0]
+    if first_word in ['supermago', 'bourbon', 'supermagoporto', 'zaffari']:
         return 'mercado'
-    return name
+    elif name.startswith('ifd') or first_word == 'ifood':
+        return 'ifood'
+    elif name.startswith('mercadolivre'):
+        return 'mercadolivre'
+    elif ('poa jardim b' in name) or ('grupolan' in name):
+        return 'gasolina'
+    elif name.startswith('raia') or first_word == 'raia':
+        return 'farmacia'
+    return name.lower().split()[0]
 
 def extract_and_filter_transactions(pdf_paths):
     transactions = []
