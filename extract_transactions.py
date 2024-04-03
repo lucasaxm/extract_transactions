@@ -17,21 +17,43 @@ def consolidate_establishments(name):
         return 'mercadolivre'
     elif ('poa jardim b' in name) or ('grupolan' in name):
         return 'gasolina'
-    elif name.startswith('raia') or first_word == 'raia':
+    elif name.startswith('raia'):
         return 'farmacia'
     return name.lower().split()[0]
+
+# Function to identify subscription expenses
+def identify_subscription(name):
+    name = name.lower()
+    first_word = name.split()[0]
+    if name.startswith('netflix'):
+        return 'netflix'
+    elif name.startswith('ifd') and ('agencia' in name):
+        return 'ifood'
+    elif 'youtubepremium' in name:
+        return 'youtube'
+    elif 'helpmax' in name:
+        return 'max'
+    elif 'xsolla' in name:
+        return 'twitch'
+    elif 'totalpass' in name:
+        return 'totalpass'
+    elif 'microsoft' in name and ('console' in name or 'ppro' in name):
+        return 'gamepass'
+    return None
 
 def extract_and_filter_transactions(pdf_paths):
     transactions = []
     installments_seen = {}
 
     # Regex pattern for transactions
-    pattern = re.compile(r'(\d{2}/\d{2})\s+([^\r\n(]+?)(?:\s*(\d{2}/\d{2}))?\s+(\d+,\d{2})\r?\n', re.DOTALL)
+    pattern = re.compile(r'^(\d{2}/\d{2})\s+([^,]+?)(?:\s*(\d{2}/\d{2}))?\s+(\d+,\d{2})$', re.DOTALL | re.MULTILINE)
     
     for pdf_path in pdf_paths:
         doc = fitz.open(pdf_path)
+        raw_text = ""
         for page in doc:
             text = page.get_text("text")
+            raw_text += text
             for date, establishment, installment_info, amount in pattern.findall(text):
                 establishment_clean = ' '.join(establishment.split('\n')).strip()
 
@@ -50,6 +72,13 @@ def extract_and_filter_transactions(pdf_paths):
 
                 transactions.append([date, key, amount])
         doc.close()
+
+        # Save the raw text to a file
+        raw_text_path = pdf_path.replace(".pdf", "_raw.txt")
+        with open(raw_text_path, 'w', encoding='utf-8') as file:
+            file.write(raw_text)
+        print(f"Raw text saved to {raw_text_path}")
+
     print(f"Installments:\n{installments_seen}")
     return transactions
 
@@ -82,6 +111,16 @@ if __name__ == "__main__":
 
     # Apply the function to the 'estabelecimento' column
     transactions['estabelecimento'] = transactions['estabelecimento'].apply(consolidate_establishments)
+
+    transactions['subscription'] = transactions['estabelecimento'].apply(identify_subscription)
+    # Group by 'subscription' and sum the 'valor'
+    subscription_expenses = transactions[transactions['subscription'].notnull()].groupby('subscription')['valor'].sum().reset_index()
+    if not subscription_expenses.empty:
+        print("\nSubscription Expenses:")
+        print(subscription_expenses)
+        print(f"Total Subscription Expenses: R$ {subscription_expenses['valor'].sum():.2f}")
+    else:
+        print("\nNo subscription expenses found.")
 
     # Group by 'estabelecimento' and sum the 'valor'
     grouped_transactions = transactions.groupby('estabelecimento')['valor'].sum().reset_index()
