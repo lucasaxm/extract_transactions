@@ -1,25 +1,28 @@
-import sys
-import fitz  # PyMuPDF
-import pandas as pd
-import re
 import csv
+import re
+import sys
+
+import fitz  # PyMuPDF
 import matplotlib.pyplot as plt
+import pandas as pd
+
 
 # Function to consolidate similar establishments
 def consolidate_establishments(name):
     name = name.lower()
     first_word = name.split()[0]
-    if first_word in ['supermago', 'bourbon', 'supermagoporto', 'zaffari']:
+    if first_word in ['supermago', 'bourbon', 'supermagoporto', 'zaffari', 'carrefour']:
         return 'mercado'
     elif name.startswith('ifd') or first_word == 'ifood':
         return 'ifood'
     elif name.startswith('mercadolivre'):
         return 'mercadolivre'
-    elif ('poa jardim b' in name) or ('grupolan' in name):
+    elif ('poa jardim b' in name) or ('grupolan' in name) or name.startswith('posto'):
         return 'gasolina'
-    elif name.startswith('raia'):
+    elif name.startswith('raia') or ('panvel' in name):
         return 'farmacia'
     return name.lower().split()[0]
+
 
 # Function to identify subscription expenses
 def identify_subscription(name):
@@ -39,15 +42,23 @@ def identify_subscription(name):
         return 'totalpass'
     elif 'microsoft' in name and ('console' in name or 'ppro' in name):
         return 'gamepass'
+    elif 'openai' in name:
+        return 'openai'
+    elif 'debrid' in name:
+        return 'debrid'
+    elif 'spotify' in name:
+        return 'spotify'
     return None
+
 
 def extract_and_filter_transactions(pdf_paths):
     transactions = []
     installments_seen = {}
 
     # Regex pattern for transactions
-    pattern = re.compile(r'^(\d{2}/\d{2})\s+([^,]+?)(?:\s*(\d{2}/\d{2}))?\s+(\d+,\d{2})$', re.DOTALL | re.MULTILINE)
-    
+    pattern = re.compile(r'^(\d{2}/\d{2})\s+([^,]+?)(?:\s*(\d{2}/\d{2}))?\s+([\d]+(?:\.[\d]{3})*,[\d]{2})$',
+                         re.DOTALL | re.MULTILINE)
+
     for pdf_path in pdf_paths:
         doc = fitz.open(pdf_path)
         raw_text = ""
@@ -82,6 +93,7 @@ def extract_and_filter_transactions(pdf_paths):
     print(f"Installments:\n{installments_seen}")
     return transactions
 
+
 if __name__ == "__main__":
     # Accept multiple PDF files as command-line arguments
     pdf_file_paths = sys.argv[1:]  # Skip the script name itself
@@ -107,14 +119,19 @@ if __name__ == "__main__":
 
     transactions = pd.read_csv(csv_output_path)
 
-    transactions['valor'] = transactions['valor'].str.replace(',', '.').astype(float)
+    transactions['valor'] = transactions['valor'] \
+        .str.replace('.', '', regex=False) \
+        .str.replace(',', '.', regex=False) \
+        .astype(float)
+
+    transactions['subscription'] = transactions['estabelecimento'].apply(identify_subscription)
 
     # Apply the function to the 'estabelecimento' column
     transactions['estabelecimento'] = transactions['estabelecimento'].apply(consolidate_establishments)
 
-    transactions['subscription'] = transactions['estabelecimento'].apply(identify_subscription)
     # Group by 'subscription' and sum the 'valor'
-    subscription_expenses = transactions[transactions['subscription'].notnull()].groupby('subscription')['valor'].sum().reset_index()
+    subscription_expenses = transactions[transactions['subscription'].notnull()].groupby('subscription')[
+        'valor'].sum().reset_index()
     if not subscription_expenses.empty:
         print("\nSubscription Expenses:")
         print(subscription_expenses)
@@ -143,8 +160,8 @@ if __name__ == "__main__":
     # Adding the value labels to each bar
     for bar in bars:
         width = bar.get_width()
-        plt.text(width + 10, bar.get_y() + bar.get_height()/2, 
-                f'R$ {width:.2f}', 
-                va='center')
+        plt.text(width + 10, bar.get_y() + bar.get_height() / 2,
+                 f'R$ {width:.2f}',
+                 va='center')
 
     plt.savefig(jpg_output_path)
